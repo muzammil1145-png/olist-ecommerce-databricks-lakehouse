@@ -1,76 +1,97 @@
-# Olist E-Commerce Lakehouse | Databricks
+# Olist E-Commerce Lakehouse Pipeline
 
-**End-to-end e-commerce data engineering and business intelligence portfolio project** using Databricks, PySpark, Spark SQL, Delta Lake, Unity Catalog, Auto Loader, Lakeflow Jobs, and AI/BI Dashboards.
+**Databricks • PySpark • Spark SQL • Delta Lake • Unity Catalog • Auto Loader • Lakeflow Jobs • AI/BI Dashboards**
 
-![Lakeflow orchestration](screenshots/lakeflow_orchestration.png)
+A data engineering portfolio project built around the public Olist Brazilian e-commerce dataset. The project covers nine source CSVs (about 1.55 million rows combined, including geolocation), the Bronze–Silver–Gold medallion architecture, data-quality checks, an incremental ingestion demonstration, and a dashboard refreshed in a five-task Databricks workflow.
 
-## Overview
+## Pipeline orchestration
 
-This project uses the public **Olist Brazilian E-Commerce** dataset (nine related CSVs, roughly 1.55 million source records including geolocation rows). Data is ingested to Bronze Delta tables, cleaned in Silver, modeled for analytics in Gold, and displayed in an AI/BI dashboard.
+![Five successful Lakeflow tasks](Screenshot%202026-10-27%20154152.png)
 
-**Pipeline:** CSVs in Unity Catalog Volume → Bronze → Silver → Data Quality → Gold → AI/BI Dashboard Refresh
+The workflow screenshot documents these **five successful tasks**:
 
-The attached orchestration capture shows five successfully executed Databricks Job tasks. Successful execution verifies task completion, not necessarily that incremental test-table updates are propagated to all downstream tables; see limitations below.
+`bronze_ingestion → silver_transformations → data_quality → gold_transformations → refresh_olist_dashboard`
+
+> **Implementation note:** Task success confirms the job completed. The Auto Loader demo writes to `olist_project.bronze.orders_incremental` while the Silver orders notebook reads `olist_project.bronze.orders`. This means the incremental test flow is not yet connected end to end to the dashboard.
 
 ## Dashboard
 
-![Olist dashboard](screenshots/olist_dashboard.png)
+[**View the dashboard PDF**](OLIST%20ECOMMERCE%20DASHBOARD%202026-10-27%2020_51.pdf)
 
-The submitted dashboard includes six KPIs: total revenue, total orders, average order value, average review score, late delivery rate, and average delivery time. Visuals examine monthly sales, state-level orders, category sales, top sellers, reviews, and delivery performance.
+The dashboard reports six executive metrics: **total revenue**, **total orders**, **average order value**, **average review score**, **late delivery rate**, and **average delivery time**. Additional visuals explore monthly sales trends, state-level orders, category performance, top sellers, review scores, and delivery patterns.
 
-Dashboard values are exploratory outputs of this specific implementation, not independently audited business totals.
+The dashboard uses historical sample data; its calculated figures have not been independently audited.
 
-## Repository structure
+## Architecture
 
-- `notebooks/01_bronze_setup.sql` — catalog, schemas, Volume, exploratory setup
-- `notebooks/02_bronze_ingestion.py` — initial batch ingestion of source CSVs
-- `notebooks/03_silver_transformations.ipynb` — cleaned entities and type conversions
-- `notebooks/04_data_quality.py` — assertions for IDs and nonnegative prices
-- `notebooks/05_gold_model.sql` — dimensions, fact, and aggregate tables
-- `notebooks/06_incremental_ingestion_demo.py` — incremental Auto Loader demonstration
-- `screenshots/` — orchestration and dashboard evidence
-- `docs/` — architecture diagram and documentation
+```text
+Olist CSV files (9 datasets)
+       |
+       v
+Unity Catalog Volume
+       |
+       v
+Bronze Delta tables (batch ingestion)
+       |
+       v
+Silver (cleaning, standardization, data types)
+       |
+       v
+Data-quality checks
+       |
+       v
+Gold (dimensions, fact table, aggregates)
+       |
+       v
+Databricks AI/BI Dashboard
+       ^
+       |
+Lakeflow Jobs orchestrates notebook tasks and dashboard refresh
 
-## Pipeline design
+Separate demo: staged order files -> Auto Loader -> bronze.orders_incremental
+```
 
-### Bronze
-Imports Olist CSV files into Delta tables. Ingestion metadata includes ingestion timestamp and source path.
+## Project files
 
-### Silver
-Standardizes customer and seller state fields, casts purchase/delivery timestamps and monetary columns, enriches product categories, and casts review scores safely.
+These links point to files **actually present** in this repository:
 
-### Gold
-Builds customer, product, and seller dimensions; order-item fact data; and monthly, category, and seller performance aggregates for reporting.
+| Component | Source |
+| --- | --- |
+| Bronze setup | [Olist Bronze Layer Setup.sql](Olist%20Bronze%20Layer%20Setup.sql) |
+| Bronze batch ingestion | [Olist Bronze Ingestion.py](Olist%20Bronze%20Ingestion.py) |
+| Silver transformations | [Olist Silver Transformations.ipynb](Olist%20Silver%20Transformations.ipynb) |
+| Data-quality checks | [Olist Data Quality Tests.py](Olist%20Data%20Quality%20Tests.py) |
+| Gold modeling | [Gold SQL notebook](New%20Notebook%202026-10-17%2011_46_12.sql) |
+| Auto Loader test | [05_incremental_ingestion.py](05_incremental_ingestion.py) |
+| Dashboard | [Dashboard PDF](OLIST%20ECOMMERCE%20DASHBOARD%202026-10-27%2020_51.pdf) |
+| Successful workflow | [Lakeflow Jobs screenshot](Screenshot%202026-10-27%20154152.png) |
 
-### Orchestration
-Lakeflow Jobs tasks: `bronze_ingestion` → `silver_transformations` → `data_quality` → `gold_transformations` → `refresh_olist_dashboard`.
+## What the code does
 
-## Incremental ingestion demonstration
-
-The Auto Loader notebook creates staged historical order batches, releases them into an incoming directory, uses `cloudFiles` with checkpoint/schema tracking, and writes to `olist_project.bronze.orders_incremental`.
-
-**Current limitation:** The regular Silver orders notebook reads `olist_project.bronze.orders`, not `orders_incremental`. The two paths must be integrated before the project can claim end-to-end incremental updates through Gold and the dashboard. The notebook is a **demo** and re-creates/moves test batches; it should not be used unchanged as a scheduled production ingestion job.
-
-## Data-model caveats and next improvements
-
-- Review data is associated with orders; joining review rows to order items can multiply sales or affect review averages if multiple reviews exist per order. Aggregate reviews to one row per order before joining and validate fact grain.
-- `dim_customer` uses distinct customer identifiers and geography and may not be unique per `customer_unique_id`. Prefer a stable key/grain for location-based joins.
-- Current Bronze batch ingestion uses overwrite mode. Separate initial backfill from append-only or idempotent production ingestion.
-- Add data-quality tests for unique composite order-item keys, referential integrity, and source-to-target row counts.
-- Keep raw data and credentials out of the repository.
+- **Bronze:** Reads CSVs into Delta tables with ingestion timestamp and source-file metadata.
+- **Silver:** Cleans customer/seller geography, order timestamps and delivery fields, product category names, order-item monetary fields, and review-score types.
+- **Data quality:** Tests order ID uniqueness, non-null order IDs, and nonnegative prices.
+- **Gold:** Creates customer/product/seller dimensions, order-item fact data, and monthly/category/seller aggregates.
+- **Incremental ingestion demonstration:** Uses `cloudFiles`, separate staging/incoming paths, schema tracking, and checkpointing to demonstrate loading newly arriving order CSV batches.
 
 ## Reproduce
 
-1. Obtain the **Brazilian E-Commerce Public Dataset by Olist** from Kaggle.
-2. Upload the nine CSVs into a Databricks Unity Catalog Volume at `/Volumes/olist_project/raw/olist_files/`.
-3. Run the setup and Bronze ingestion notebooks.
-4. Run Silver transformations and data-quality checks.
-5. Run the Gold SQL model and configure a Databricks AI/BI Dashboard against Gold.
-6. Set up a Lakeflow Job with notebook task dependencies and a published dashboard refresh task.
-7. Run the Auto Loader demo separately to experiment with arrival of new files.
+1. Download the [Olist Brazilian E-Commerce public dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
+2. Upload nine CSVs to a Databricks Volume at `/Volumes/olist_project/raw/olist_files/`.
+3. Run the Bronze setup and batch-ingestion notebooks.
+4. Run Silver transformations, then the data-quality notebook.
+5. Run the Gold notebook to create dimensional and aggregate tables.
+6. Build the AI/BI dashboard from Gold data and configure a five-task Lakeflow Job with a dashboard refresh at the end.
+7. Run `05_incremental_ingestion.py` **separately** to see Auto Loader file discovery and checkpoint behavior. It is a demonstration notebook, not a repeatable production job.
 
-## Dataset and attribution
+## Engineering improvements to implement next
 
-Source: [Brazilian E-Commerce Public Dataset by Olist (Kaggle)](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
+1. **Connect incremental updates downstream:** make the incremental Bronze stream feed the same logical input consumed by Silver, then verify Gold and dashboard results change when a new order batch arrives.
+2. **Prevent fact-table duplication:** the Gold SQL joins order items directly to reviews; multiple review rows per order can inflate item-level sums. Aggregate or deduplicate reviews at order grain first.
+3. **Validate customer dimension grain:** `customer_unique_id` and state should be modeled so each fact joins to an appropriate unique geography record.
+4. **Strengthen quality tests:** include source-to-target counts, referential integrity, review-score validity, and uniqueness on `(order_id, order_item_id)`.
+5. **Separate demo from production:** remove manual batch release from job notebooks and avoid overwriting live Bronze history.
 
-This project is a personal portfolio demonstration using a public historical dataset, not a live Olist production system.
+## Dataset credit
+
+Data: [Brazilian E-Commerce Public Dataset by Olist on Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce). Personal learning/portfolio project; not affiliated with Olist.
